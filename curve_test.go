@@ -5,6 +5,14 @@ import (
 	"testing"
 )
 
+func TestHello(t *testing.T){
+	seven := big.NewInt(20)
+	two := big.NewInt(3)
+	div := new(big.Int).Div(seven, two)
+
+	t.Log(div.String())
+}
+
 func TestIsOnCurve(t *testing.T) {
 	gOnCurve := Stark().IsOnCurve(Stark().Gx, Stark().Gy)
 	spOnCurve := Stark().IsOnCurve(Stark().ShiftPointx, Stark().ShiftPointy)

@@ -37,25 +37,25 @@ func (starkCurve *StarkCurve) IsOnCurve(x, y *big.Int) bool {
 // Add returns the sum of P(x1,y1) and Q(x2,y2), note, P != Q
 func (starkCurve *StarkCurve) Add(x1, y1, x2, y2 *big.Int) (*big.Int, *big.Int, error) {
 	if x1.Cmp(x2) == 0 && y1.Cmp(y2) == 0 {
-		return nil, nil, errors.New("error, the two points P(x1,y1) and Q(x2,y2) are equal, pls use Double function.")
+		return nil, nil, errors.New("error, the two points P(x1,y1) and Q(x2,y2) are equal, pls use Double function")
 	}
 
 	xDelta := new(big.Int).Sub(x1, x2)
-	xDeltaInv := xDelta.ModInverse(xDelta, curve.P)
+	xDeltaInv := new(big.Int).ModInverse(xDelta, curve.P)
 	yDelta := new(big.Int).Sub(y1, y2)
 
-	k := yDelta.Mul(yDelta, xDeltaInv)
-	k = k.Mod(k, curve.P)
+	k := new(big.Int).Mul(yDelta, xDeltaInv)
+	k = new(big.Int).Mod(k, curve.P)
 
-	k2 := k.Mul(k, k)
-	xRlt := k2.Sub(k2, x1)
-	xRlt = k2.Sub(xRlt, x2)
-	xRlt = xRlt.Mod(xRlt, curve.P)
+	k2 := new(big.Int).Mul(k, k)
+	xRlt := new(big.Int).Sub(k2, x1)
+	xRlt = new(big.Int).Sub(xRlt, x2)
+	xRlt = new(big.Int).Mod(xRlt, curve.P)
 
-	x1SubX := x1.Sub(x1, xRlt)
-	yRlt := k.Mul(k, x1SubX)
-	yRlt = yRlt.Sub(yRlt, y1)
-	yRlt = yRlt.Mod(yRlt, curve.P)
+	x1SubX := new(big.Int).Sub(x1, xRlt)
+	yRlt := new(big.Int).Mul(k, x1SubX)
+	yRlt = new(big.Int).Sub(yRlt, y1)
+	yRlt = new(big.Int).Mod(yRlt, curve.P)
 
 	return xRlt, yRlt, nil
 }
@@ -67,20 +67,20 @@ func (starkCurve *StarkCurve) Double(x1, y1 *big.Int) (*big.Int, *big.Int) {
 	threeX2Alpha = new(big.Int).Add(threeX2Alpha, curve.Alpha)
 
 	twoY1 := new(big.Int).Mul(big.NewInt(2), y1)
-	twoY1Inv := twoY1.ModInverse(twoY1, curve.P)
+	twoY1Inv := new(big.Int).ModInverse(twoY1, curve.P)
 
-	k := twoY1Inv.Mul(threeX2Alpha, twoY1Inv)
-	k = k.Mod(k, curve.P)
+	k := new(big.Int).Mul(threeX2Alpha, twoY1Inv)
+	k = new(big.Int).Mod(k, curve.P)
 
-	k2 := k.Mul(k, k)
-	xRlt := k2.Sub(k2, x1)
-	xRlt = k2.Sub(xRlt, x1)
-	xRlt = xRlt.Mod(xRlt, curve.P)
+	k2 := new(big.Int).Mul(k, k)
+	xRlt := new(big.Int).Sub(k2, x1)
+	xRlt = new(big.Int).Sub(xRlt, x1)
+	xRlt = new(big.Int).Mod(xRlt, curve.P)
 
-	x1SubX := x1.Sub(x1, xRlt)
-	yRlt := k.Mul(k, x1SubX)
-	yRlt = yRlt.Sub(yRlt, y1)
-	yRlt = yRlt.Mod(yRlt, curve.P)
+	x1SubX := new(big.Int).Sub(x1, xRlt)
+	yRlt := new(big.Int).Mul(k, x1SubX)
+	yRlt = new(big.Int).Sub(yRlt, y1)
+	yRlt = new(big.Int).Mod(yRlt, curve.P)
 
 	return xRlt, yRlt
 }
@@ -97,16 +97,16 @@ func (starkCurve *StarkCurve) ScalarMult(Bx, By *big.Int, k []byte) (*big.Int, *
 func (starkCurve *StarkCurve) ScalarMultInt(Bx, By, kInt *big.Int) (*big.Int, *big.Int) {
 	kInt = new(big.Int).Mod(kInt, curve.N)
 
-	if kInt.Cmp(big.NewInt(1)) == 1 {
+	if kInt.Cmp(big.NewInt(1)) == 0 {
 		return Bx, By
 	}
 
-	if kInt.Mod(kInt, big.NewInt(2)).Cmp(big.NewInt(0)) == 0 {
+	if new(big.Int).Mod(kInt, big.NewInt(2)).Cmp(big.NewInt(0)) == 0 {
 		doubleBx, doubleBy := starkCurve.Double(Bx, By)
-		return starkCurve.ScalarMultInt(doubleBx, doubleBy, kInt.Div(kInt, big.NewInt(2)))
+		return starkCurve.ScalarMultInt(doubleBx, doubleBy, new(big.Int).Div(kInt, big.NewInt(2)))
 	}
 
-	xRlt, yRlt := starkCurve.ScalarMultInt(Bx, By, kInt.Sub(kInt, big.NewInt(1)))
+	xRlt, yRlt := starkCurve.ScalarMultInt(Bx, By, new(big.Int).Sub(kInt, big.NewInt(1)))
 	xRlt, yRlt, _ = starkCurve.Add(xRlt, yRlt, Bx, By)
 
 	return xRlt, yRlt
