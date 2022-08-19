@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@starkware-industries/starkware-crypto-utils": "^0.0.2"
+  }
+}
