@@ -90,7 +90,7 @@ func Verify(xPublicKey, yPublicKey, r, s, hash *big.Int) bool {
 	xU1G, yU1G := Stark().ScalarBaseMult(u1.Bytes())
 	xU2Pk, yU2Pk := Stark().ScalarMult(xPublicKey, yPublicKey, u2.Bytes())
 
-	xCalKG, _, _ := Stark().Add(xU1G, yU1G, xU2Pk, yU2Pk)
+	xCalKG, _ := Stark().Add(xU1G, yU1G, xU2Pk, yU2Pk)
 	rCal := new(big.Int).Mod(xCalKG, Stark().N)
 
 	if rCal.Cmp(r) == 0 {

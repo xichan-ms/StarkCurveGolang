@@ -1,9 +1,30 @@
 package starkcurve
 
 import (
+	"crypto/elliptic"
 	"math/big"
-	"errors"
 )
+
+const (
+	// number of bits in a big.Word
+	wordBits = 32 << (uint64(^big.Word(0)) >> 63)
+	// number of bytes in a big.Word
+	wordBytes = wordBits / 8
+)
+
+// readBits encodes the absolute value of bigint as big-endian bytes. Callers
+// must ensure that buf has enough space. If buf is too short the result will
+// be incomplete.
+func readBits(bigint *big.Int, buf []byte) {
+	i := len(buf)
+	for _, d := range bigint.Bits() {
+		for j := 0; j < wordBytes && i > 0; j++ {
+			i--
+			buf[i] = byte(d)
+			d >>= 8
+		}
+	}
+}
 
 // Stark Curve, see https://docs.starkware.co/starkex-v4/crypto/stark-curve
 // y^2 = x^3 + alpha*x + beta (mod p)
@@ -12,9 +33,21 @@ type StarkCurve struct {
 	N                                  *big.Int
 	Alpha, Beta                        *big.Int
 	Gx, Gy                             *big.Int
+	BitSize                            int // the size of the underlying field
 	ShiftPointx, ShiftPointy           *big.Int
 	MinusShiftPointx, MinusShiftPointy *big.Int
 	Max                                *big.Int
+}
+
+func (starkCurve *StarkCurve) Params() *elliptic.CurveParams {
+	return &elliptic.CurveParams{
+		P:       curve.P,
+		N:       curve.N,
+		B:       curve.Beta,
+		Gx:      curve.Gx,
+		Gy:      curve.Gy,
+		BitSize: curve.BitSize,
+	}
 }
 
 // IsOnCurve returns true if the given (x,y) lies on the Stark Curve.
@@ -35,9 +68,9 @@ func (starkCurve *StarkCurve) IsOnCurve(x, y *big.Int) bool {
 }
 
 // Add returns the sum of P(x1,y1) and Q(x2,y2), note, P != Q
-func (starkCurve *StarkCurve) Add(x1, y1, x2, y2 *big.Int) (*big.Int, *big.Int, error) {
+func (starkCurve *StarkCurve) Add(x1, y1, x2, y2 *big.Int) (*big.Int, *big.Int) {
 	if x1.Cmp(x2) == 0 && y1.Cmp(y2) == 0 {
-		return nil, nil, errors.New("error, the two points P(x1,y1) and Q(x2,y2) are equal, pls use Double function")
+		return curve.Double(x1, y1)
 	}
 
 	xDelta := new(big.Int).Sub(x1, x2)
@@ -57,7 +90,7 @@ func (starkCurve *StarkCurve) Add(x1, y1, x2, y2 *big.Int) (*big.Int, *big.Int, 
 	yRlt = new(big.Int).Sub(yRlt, y1)
 	yRlt = new(big.Int).Mod(yRlt, curve.P)
 
-	return xRlt, yRlt, nil
+	return xRlt, yRlt
 }
 
 // Double returns 2*(x,y)
@@ -107,10 +140,10 @@ func (starkCurve *StarkCurve) ScalarMultInt(Bx, By, kInt *big.Int) (*big.Int, *b
 	}
 
 	xRlt, yRlt := starkCurve.ScalarMultInt(Bx, By, new(big.Int).Sub(kInt, big.NewInt(1)))
-	xRlt, yRlt, _ = starkCurve.Add(xRlt, yRlt, Bx, By)
+	xRlt, yRlt = starkCurve.Add(xRlt, yRlt, Bx, By)
 
 	return xRlt, yRlt
-} 
+}
 
 // ScalarBaseMult returns k*G, where G is the base point of the group and k is
 // an integer in big-endian form.
@@ -118,7 +151,34 @@ func (starkCurve *StarkCurve) ScalarBaseMult(k []byte) (*big.Int, *big.Int) {
 	return starkCurve.ScalarMult(curve.Gx, curve.Gy, k)
 }
 
+// Marshal converts a point into the form specified in section 4.3.6 of ANSI X9.62.
+func (starkCurve *StarkCurve) Marshal(x, y *big.Int) []byte {
+	byteLen := (starkCurve.BitSize + 7) >> 3
+	ret := make([]byte, 1+2*byteLen)
+	ret[0] = 4 // uncompressed point flag
+	readBits(x, ret[1:1+byteLen])
+	readBits(y, ret[1+byteLen:])
+	return ret
+}
+
+// Unmarshal converts a point, serialised by Marshal, into an x, y pair. On error, x = nil.
+func (starkCurve *StarkCurve) Unmarshal(data []byte) (x, y *big.Int) {
+	byteLen := (starkCurve.BitSize + 7) >> 3
+	if len(data) != 1+2*byteLen {
+		return
+	}
+	if data[0] != 4 { // uncompressed form
+		return
+	}
+	x = new(big.Int).SetBytes(data[1 : 1+byteLen])
+	y = new(big.Int).SetBytes(data[1+byteLen:])
+	return
+}
+
 var curve = new(StarkCurve)
+
+// # Elliptic curve parameters.
+// assert 2**N_ELEMENT_BITS_ECDSA < EC_ORDER < FIELD_PRIME
 
 func init() {
 	curve.P, _ = new(big.Int).SetString("3618502788666131213697322783095070105623107215331596699973092056135872020481", 10)
@@ -127,6 +187,7 @@ func init() {
 	curve.Beta, _ = new(big.Int).SetString("3141592653589793238462643383279502884197169399375105820974944592307816406665", 10)
 	curve.Gx, _ = new(big.Int).SetString("874739451078007766457464989774322083649278607533249481151382481072868806602", 10)
 	curve.Gy, _ = new(big.Int).SetString("152666792071518830868575557812948353041420400780739481342941381225525861407", 10)
+	curve.BitSize = 252
 	curve.ShiftPointx, _ = new(big.Int).SetString("2089986280348253421170679821480865132823066470938446095505822317253594081284", 10)
 	curve.ShiftPointy, _ = new(big.Int).SetString("1713931329540660377023406109199410414810705867260802078187082345529207694986", 10)
 	curve.MinusShiftPointx, _ = new(big.Int).SetString("2089986280348253421170679821480865132823066470938446095505822317253594081284", 10)
@@ -137,6 +198,12 @@ func init() {
 // Stark returns a StarkCurve instance
 func Stark() *StarkCurve {
 	return curve
+}
+
+func (starkCurve *StarkCurve) N3() *big.Int {
+	N3 := new(big.Int).Mul(starkCurve.N, starkCurve.N)
+	N3 = new(big.Int).Mul(N3, starkCurve.N)
+	return N3
 }
 
 func KMulG(k []byte) (*big.Int, *big.Int) {
